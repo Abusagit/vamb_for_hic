@@ -9,6 +9,7 @@ import torch
 import datetime
 import time
 import shutil
+import pickle
 
 DEFAULT_PROCESSES = min(os.cpu_count(), 8)
 
@@ -99,7 +100,6 @@ def calc_rpkm(outdir, bampaths, rpkmpath, jgipath, mincontiglength, refhash, nco
         log('Loading RPKM from JGI file {}'.format(jgipath), logfile, 1)
         with open(jgipath) as file:
             rpkms = vamb.vambtools._load_jgi(file, mincontiglength, refhash)
-
     else:
         log('Parsing {} BAM files with {} subprocesses'.format(len(bampaths), subprocesses),
            logfile, 1)
@@ -248,13 +248,19 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
     rpkms = calc_rpkm(outdir, bampaths, rpkmpath, jgipath, mincontiglength, refhash,
                       len(tnfs), minalignscore, minid, subprocesses, logfile)
 
+    
     # Train, save model
     mask, latent = trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta,
                            dropout, cuda, batchsize, nepochs, lrate, batchsteps, logfile)
 
     del tnfs, rpkms
     contignames = [c for c, m in zip(contignames, mask) if m]
-
+    vamb.vambtools.write_npz(os.path.join(outdir, 'names.npz'), contignames)
+    # write contig features
+    with open("embs.tsv", 'w') as f:
+        for i in range(len(contignames)):
+            f.write(contignames[i] + "\t" + "\t".join([str(x) for x in latent[i]]) + "\n")
+        
     # Cluster, save tsv file
     clusterspath = os.path.join(outdir, 'clusters.tsv')
     cluster(clusterspath, latent, contignames, windowsize, minsuccesses, maxclusters,
