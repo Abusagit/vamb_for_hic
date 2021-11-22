@@ -62,7 +62,8 @@ def read_contigs(filehandle, minlength=100):
             _convert(raw, projected)
 
         lengths.append(len(entry))
-        contignames.append(entry.header)
+        #contignames.append(entry.header)
+        contignames.append(entry.header.split()[0])
 
     # Convert rest of contigs
     _convert(raw, projected)

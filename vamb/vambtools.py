@@ -9,6 +9,7 @@ from vamb._vambtools import _kmercounts, _overwrite_matrix
 import collections as _collections
 from hashlib import md5 as _md5
 
+
 class PushArray:
     """Data structure that allows efficient appending and extending a 1D Numpy array.
     Intended to strike a balance between not resizing too often (which is slow), and
@@ -22,9 +23,9 @@ class PushArray:
     array([5. , 4. , 3.5, 3. ])
     """
 
-    __slots__ = ['data', 'capacity', 'length']
+    __slots__ = ["data", "capacity", "length"]
 
-    def __init__(self, dtype, start_capacity=1<<16):
+    def __init__(self, dtype, start_capacity=1 << 16):
         self.capacity = start_capacity
         self.data = _np.empty(self.capacity, dtype=dtype)
         self.length = 0
@@ -55,7 +56,7 @@ class PushArray:
         if self.length + lenv > self.capacity:
             self._grow(lenv)
 
-        self.data[self.length:self.length+lenv] = values
+        self.data[self.length : self.length + lenv] = values
         self.length += lenv
 
     def take(self):
@@ -68,6 +69,7 @@ class PushArray:
         self.length = 0
         if force:
             self._setcapacity(0)
+
 
 def zscore(array, axis=None, inplace=False):
     """Calculates zscore for an array. A cheap copy of scipy.stats.zscore.
@@ -82,20 +84,20 @@ def zscore(array, axis=None, inplace=False):
         else: New normalized Numpy-array"""
 
     if axis is not None and axis >= array.ndim:
-        raise _np.AxisError('array only has {} axes'.format(array.ndim))
+        raise _np.AxisError("array only has {} axes".format(array.ndim))
 
     if inplace and not _np.issubdtype(array.dtype, _np.floating):
-        raise TypeError('Cannot convert a non-float array to zscores')
+        raise TypeError("Cannot convert a non-float array to zscores")
 
     mean = array.mean(axis=axis)
     std = array.std(axis=axis)
 
     if axis is None:
         if std == 0:
-            std = 1 # prevent divide by zero
+            std = 1  # prevent divide by zero
 
     else:
-        std[std == 0.0] = 1 # prevent divide by zero
+        std[std == 0.0] = 1  # prevent divide by zero
         shape = tuple(dim if ax != axis else 1 for ax, dim in enumerate(array.shape))
         mean.shape, std.shape = shape, shape
 
@@ -106,6 +108,7 @@ def zscore(array, axis=None, inplace=False):
     else:
         return (array - mean) / std
 
+
 def numpy_inplace_maskarray(array, mask):
     """In-place masking of a Numpy array, i.e. if `mask` is a boolean mask of same
     length as `array`, then array[mask] == numpy_inplace_maskarray(array, mask),
@@ -113,14 +116,15 @@ def numpy_inplace_maskarray(array, mask):
     """
 
     if len(mask) != len(array):
-        raise ValueError('Lengths of array and mask must match')
+        raise ValueError("Lengths of array and mask must match")
     elif len(array.shape) != 2:
-        raise ValueError('Can only take a 2 dimensional-array.')
+        raise ValueError("Can only take a 2 dimensional-array.")
 
     uints = _np.frombuffer(mask, dtype=_np.uint8)
     index = _overwrite_matrix(array, uints)
     array.resize((index, array.shape[1]), refcheck=False)
     return array
+
 
 def torch_inplace_maskarray(array, mask):
     """In-place masking of a Tensor, i.e. if `mask` is a boolean mask of same
@@ -129,15 +133,16 @@ def torch_inplace_maskarray(array, mask):
     """
 
     if len(mask) != len(array):
-        raise ValueError('Lengths of array and mask must match')
+        raise ValueError("Lengths of array and mask must match")
     elif array.dim() != 2:
-        raise ValueError('Can only take a 2 dimensional-array.')
+        raise ValueError("Can only take a 2 dimensional-array.")
 
     np_array = array.numpy()
     np_mask = _np.frombuffer(mask.numpy(), dtype=_np.uint8)
     index = _overwrite_matrix(np_array, np_mask)
     array.resize_((index, array.shape[1]))
     return array
+
 
 class Reader:
     """Use this instead of `open` to open files which are either plain text,
@@ -149,17 +154,17 @@ class Reader:
     TEST LINE
     """
 
-    def __init__(self, filename, readmode='r'):
-        if readmode not in ('r', 'rt', 'rb'):
+    def __init__(self, filename, readmode="r"):
+        if readmode not in ("r", "rt", "rb"):
             raise ValueError("the Reader cannot write, set mode to 'r' or 'rb'")
-        if readmode == 'r':
-            self.readmode = 'rt'
+        if readmode == "r":
+            self.readmode = "rt"
         else:
             self.readmode = readmode
 
         self.filename = filename
 
-        with open(self.filename, 'rb') as f:
+        with open(self.filename, "rb") as f:
             signature = f.peek(8)[:8]
 
         # Gzipped files begin with the two bytes 0x1F8B
@@ -167,7 +172,7 @@ class Reader:
             self.filehandle = _gzip.open(self.filename, self.readmode)
 
         # bzip2 files begin with the signature BZ
-        elif signature[:2] == b'BZ':
+        elif signature[:2] == b"BZ":
             self.filehandle = _bz2.open(self.filename, self.readmode)
 
         # .XZ files begins with 0xFD377A585A0000
@@ -190,22 +195,22 @@ class Reader:
     def __iter__(self):
         return self.filehandle
 
+
 class FastaEntry:
     """One single FASTA entry. Instantiate with string header and bytearray
     sequence."""
 
-    basemask = bytearray.maketrans(b'acgtuUswkmyrbdhvnSWKMYRBDHV',
-                                   b'ACGTTTNNNNNNNNNNNNNNNNNNNNN')
-    __slots__ = ['header', 'sequence']
+    basemask = bytearray.maketrans(b"acgtuUswkmyrbdhvnSWKMYRBDHV", b"ACGTTTNNNNNNNNNNNNNNNNNNNNN")
+    __slots__ = ["header", "sequence"]
 
     def __init__(self, header, sequence):
-        if len(header) > 0 and (header[0] in ('>', '#') or header[0].isspace()):
-            raise ValueError('Header cannot begin with #, > or whitespace')
-        if '\t' in header:
-            raise ValueError('Header cannot contain a tab')
+        if len(header) > 0 and (header[0] in (">", "#") or header[0].isspace()):
+            raise ValueError("Header cannot begin with #, > or whitespace")
+        if "\t" in header:
+            raise ValueError("Header cannot contain a tab")
 
-        masked = sequence.translate(self.basemask, b' \t\n\r')
-        stripped = masked.translate(None, b'ACGTN')
+        masked = sequence.translate(self.basemask, b" \t\n\r")
+        stripped = masked.translate(None, b"ACGTN")
         if len(stripped) > 0:
             bad_character = chr(stripped[0])
             msg = "Non-IUPAC DNA byte in sequence {}: '{}'"
@@ -218,28 +223,29 @@ class FastaEntry:
         return len(self.sequence)
 
     def __str__(self):
-        return '>{}\n{}'.format(self.header, self.sequence.decode())
+        return ">{}\n{}".format(self.header, self.sequence.decode())
 
     def format(self, width=60):
         sixtymers = range(0, len(self.sequence), width)
-        spacedseq = '\n'.join([self.sequence[i: i+width].decode() for i in sixtymers])
-        return '>{}\n{}'.format(self.header, spacedseq)
+        spacedseq = "\n".join([self.sequence[i : i + width].decode() for i in sixtymers])
+        return ">{}\n{}".format(self.header, spacedseq)
 
     def __getitem__(self, index):
         return self.sequence[index]
 
     def __repr__(self):
-        return '<FastaEntry {}>'.format(self.header)
+        return "<FastaEntry {}>".format(self.header)
 
     def kmercounts(self, k):
         if k < 1 or k > 10:
-            raise ValueError('k must be between 1 and 10 inclusive')
+            raise ValueError("k must be between 1 and 10 inclusive")
 
-        counts = _np.zeros(1 << (2*k), dtype=_np.int32)
+        counts = _np.zeros(1 << (2 * k), dtype=_np.int32)
         _kmercounts(self.sequence, k, counts)
         return counts
 
-def byte_iterfasta(filehandle, comment=b'#'):
+
+def byte_iterfasta(filehandle, comment=b"#"):
     """Yields FastaEntries from a binary opened fasta file.
 
     Usage:
@@ -262,17 +268,17 @@ def byte_iterfasta(filehandle, comment=b'#'):
             if stripped.startswith(comment):
                 pass
 
-            elif probeline[0:1] == b'>':
+            elif probeline[0:1] == b">":
                 break
 
             else:
-                raise ValueError('First non-comment line is not a Fasta header')
+                raise ValueError("First non-comment line is not a Fasta header")
 
-        else: # no break
-            raise ValueError('Empty or outcommented file')
+        else:  # no break
+            raise ValueError("Empty or outcommented file")
 
     except TypeError:
-        errormsg = 'First line does not contain bytes. Are you reading file in binary mode?'
+        errormsg = "First line does not contain bytes. Are you reading file in binary mode?"
         raise TypeError(errormsg) from None
 
     header = probeline[1:-1].decode()
@@ -283,7 +289,7 @@ def byte_iterfasta(filehandle, comment=b'#'):
         if line.startswith(comment):
             pass
 
-        elif line.startswith(b'>'):
+        elif line.startswith(b">"):
             yield FastaEntry(header, bytearray().join(buffer))
             buffer.clear()
             header = line[1:-1].decode()
@@ -293,8 +299,8 @@ def byte_iterfasta(filehandle, comment=b'#'):
 
     yield FastaEntry(header, bytearray().join(buffer))
 
-def write_clusters(filehandle, clusters, max_clusters=None, min_size=1,
-                 header=None, rename=True):
+
+def write_clusters(filehandle, clusters, max_clusters=None, min_size=1, header=None, rename=True):
     """Writes clusters to an open filehandle.
     Inputs:
         filehandle: An open filehandle that can be written to
@@ -309,8 +315,8 @@ def write_clusters(filehandle, clusters, max_clusters=None, min_size=1,
         ncontigs: Number of contigs written
     """
 
-    if not hasattr(filehandle, 'writable') or not filehandle.writable():
-        raise ValueError('Filehandle must be a writable file')
+    if not hasattr(filehandle, "writable") or not filehandle.writable():
+        raise ValueError("Filehandle must be a writable file")
 
     # Special case to allows dicts even though they are not iterators of
     # clustername, {cluster}
@@ -318,14 +324,14 @@ def write_clusters(filehandle, clusters, max_clusters=None, min_size=1,
         clusters = clusters.items()
 
     if max_clusters is not None and max_clusters < 1:
-        raise ValueError('max_clusters must None or at least 1, not {}'.format(max_clusters))
+        raise ValueError("max_clusters must None or at least 1, not {}".format(max_clusters))
 
     if header is not None and len(header) > 0:
-        if '\n' in header:
-            raise ValueError('Header cannot contain newline')
+        if "\n" in header:
+            raise ValueError("Header cannot contain newline")
 
-        if header[0] != '#':
-            header = '# ' + header
+        if header[0] != "#":
+            header = "# " + header
 
         print(header, file=filehandle)
 
@@ -337,10 +343,10 @@ def write_clusters(filehandle, clusters, max_clusters=None, min_size=1,
             continue
 
         if rename:
-            clustername = 'cluster_' + str(clusternumber + 1)
+            clustername = "cluster_" + str(clusternumber + 1)
 
         for contig in contigs:
-            print(clustername, contig, sep='\t', file=filehandle)
+            print(clustername, contig, sep="\t", file=filehandle)
         filehandle.flush()
 
         clusternumber += 1
@@ -350,6 +356,7 @@ def write_clusters(filehandle, clusters, max_clusters=None, min_size=1,
             break
 
     return clusternumber, ncontigs
+
 
 def read_clusters(filehandle, min_size=1):
     """Read clusters from a file as created by function `writeclusters`.
@@ -365,10 +372,10 @@ def read_clusters(filehandle, min_size=1):
     for line in filehandle:
         stripped = line.strip()
 
-        if not stripped or stripped[0] == '#':
+        if not stripped or stripped[0] == "#":
             continue
 
-        clustername, contigname = stripped.split('\t')
+        clustername, contigname = stripped.split("\t")
         contigsof[clustername].add(contigname)
 
     contigsof = {cl: co for cl, co in contigsof.items() if len(co) >= min_size}
@@ -376,7 +383,7 @@ def read_clusters(filehandle, min_size=1):
     return contigsof
 
 
-def loadfasta(byte_iterator, keep=None, comment=b'#', compress=False):
+def loadfasta(byte_iterator, keep=None, comment=b"#", compress=False):
     """Loads a FASTA file into a dictionary.
 
     Usage:
@@ -395,13 +402,14 @@ def loadfasta(byte_iterator, keep=None, comment=b'#', compress=False):
     entries = dict()
 
     for entry in byte_iterfasta(byte_iterator, comment=comment):
-        if keep is None or entry.header in keep:
+        entry_header = entry.header.split()[0]
+        if keep is None or entry_header in keep:
             if compress:
                 entry.sequence = bytearray(_gzip.compress(entry.sequence, compresslevel=2))
-
-            entries[entry.header] = entry
+            entries[entry_header] = entry
 
     return entries
+
 
 def write_bins(directory, bins, fastadict, compressed=False, maxbins=250, minsize=0):
     """Writes bins as FASTA files in a directory, one file per bin.
@@ -422,14 +430,14 @@ def write_bins(directory, bins, fastadict, compressed=False, maxbins=250, minsiz
     # If you do this on a compute cluster it can grind the entire cluster to
     # a halt and piss people off like you wouldn't believe.
     if maxbins is not None and len(bins) > maxbins:
-        raise ValueError('{} bins exceed maxbins of {}'.format(len(bins), maxbins))
+        raise ValueError("{} bins exceed maxbins of {}".format(len(bins), maxbins))
 
     # Check that the directory is not a non-directory file,
     # and that its parent directory indeed exists
     abspath = _os.path.abspath(directory)
     parentdir = _os.path.dirname(abspath)
 
-    if parentdir != '' and not _os.path.isdir(parentdir):
+    if parentdir != "" and not _os.path.isdir(parentdir):
         raise NotADirectoryError(parentdir)
 
     if _os.path.isfile(abspath):
@@ -447,7 +455,7 @@ def write_bins(directory, bins, fastadict, compressed=False, maxbins=250, minsiz
     allcontigs -= fastadict.keys()
     if allcontigs:
         nmissing = len(allcontigs)
-        raise IndexError('{} contigs in bins missing from fastadict'.format(nmissing))
+        raise IndexError("{} contigs in bins missing from fastadict".format(nmissing))
 
     # Make the directory if it does not exist - if it does, do nothing
     try:
@@ -473,20 +481,22 @@ def write_bins(directory, bins, fastadict, compressed=False, maxbins=250, minsiz
             continue
 
         # Print bin to file
-        filename = _os.path.join(directory, binname + '.fna')
-        with open(filename, 'w') as file:
+        filename = _os.path.join(directory, binname + ".fna")
+        with open(filename, "w") as file:
             for entry in bin:
                 print(entry.format(), file=file)
 
+
 def validate_input_array(array):
     "Returns array similar to input array but C-contiguous and with own data."
-    if not array.flags['C_CONTIGUOUS']:
+    if not array.flags["C_CONTIGUOUS"]:
         array = _np.ascontiguousarray(array)
-    if not array.flags['OWNDATA']:
+    if not array.flags["OWNDATA"]:
         array = array.copy()
 
-    assert (array.flags['C_CONTIGUOUS'] and array.flags['OWNDATA'])
+    assert array.flags["C_CONTIGUOUS"] and array.flags["OWNDATA"]
     return array
+
 
 def read_npz(file):
     """Loads array in .npz-format
@@ -497,10 +507,11 @@ def read_npz(file):
     """
 
     npz = _np.load(file)
-    array = validate_input_array(npz['arr_0'])
+    array = validate_input_array(npz["arr_0"])
     npz.close()
 
     return array
+
 
 def write_npz(file, array):
     """Writes a Numpy array to an open file or path in .npz format
@@ -512,6 +523,7 @@ def write_npz(file, array):
     Output: None
     """
     _np.savez_compressed(file, array)
+
 
 def filtercontigs(infile, outfile, minlength=2000):
     """Creates new FASTA file with filtered contigs
@@ -529,6 +541,7 @@ def filtercontigs(infile, outfile, minlength=2000):
     for entry in fasta_entries:
         if len(entry) > minlength:
             print(entry.format(), file=outfile)
+
 
 def concatenate_fasta(outfile, inpaths, minlength=2000, rename=True):
     """Creates a new FASTA file from input paths, and optionally rename contig headers
@@ -565,12 +578,12 @@ def concatenate_fasta(outfile, inpaths, minlength=2000, rename=True):
                     newheader = identifier
 
                 if newheader in headers:
-                    raise ValueError("Multiple sequences would be given "
-                                     "header {}.".format(newheader))
+                    raise ValueError("Multiple sequences would be given " "header {}.".format(newheader))
                 headers.add(newheader)
 
                 entry.header = newheader
                 print(entry.format(), file=outfile)
+
 
 def _hash_refnames(refnames):
     "Hashes an iterable of strings of reference names using MD5."
@@ -580,40 +593,44 @@ def _hash_refnames(refnames):
 
     return hasher.digest()
 
+
 def _load_jgi(filehandle, minlength, refhash):
     "This function can be merged with load_jgi below in the next breaking release (post 3.0)"
     header = next(filehandle)
-    fields = header.strip().split('\t')
+    fields = header.strip().split("\t")
     if not fields[:3] == ["contigName", "contigLen", "totalAvgDepth"]:
-        raise ValueError('Input file format error: First columns should be "contigName,"'
-        '"contigLen" and "totalAvgDepth"')
-
+        raise ValueError(
+            'Input file format error: First columns should be "contigName,"' '"contigLen" and "totalAvgDepth"'
+        )
     columns = tuple([i for i in range(3, len(fields)) if not fields[i].endswith("-var")])
     array = PushArray(_np.float32)
     identifiers = list()
 
     for row in filehandle:
-        fields = row.split('\t')
+        fields = row.split("\t")
         # We use float because very large numbers will be printed in scientific notation
         if float(fields[1]) < minlength:
             continue
 
         for col in columns:
             array.append(float(fields[col]))
-        
+
         identifiers.append(fields[0])
-    
+
     if refhash is not None:
         hash = _hash_refnames(identifiers)
         if hash != refhash:
-            errormsg = ('JGI file has reference hash {}, expected {}. '
-                        'Verify that all BAM headers and FASTA headers are '
-                        'identical and in the same order.')
+            errormsg = (
+                "JGI file has reference hash {}, expected {}. "
+                "Verify that all BAM headers and FASTA headers are "
+                "identical and in the same order."
+            )
             raise ValueError(errormsg.format(hash.hex(), refhash.hex()))
 
     result = array.take()
     result.shape = (len(result) // len(columns), len(columns))
     return validate_input_array(result)
+
 
 def load_jgi(filehandle):
     """Load depths from the --outputDepth of jgi_summarize_bam_contig_depths.
@@ -629,13 +646,14 @@ def load_jgi(filehandle):
     """
     return _load_jgi(filehandle, 0, None)
 
+
 def _split_bin(binname, headers, separator, bysample=_collections.defaultdict(set)):
     "Split a single bin by the prefix of the headers"
 
     bysample.clear()
     for header in headers:
         if not isinstance(header, str):
-            raise TypeError('Can only split named sequences, not of type {}'.format(type(header)))
+            raise TypeError("Can only split named sequences, not of type {}".format(type(header)))
 
         sample, _sep, identifier = header.partition(separator)
 
@@ -648,11 +666,13 @@ def _split_bin(binname, headers, separator, bysample=_collections.defaultdict(se
         newbinname = "{}{}{}".format(sample, separator, binname)
         yield newbinname, splitheaders
 
+
 def _binsplit_generator(cluster_iterator, separator):
     "Return a generator over split bins with the function above."
     for binname, headers in cluster_iterator:
         for newbinname, splitheaders in _split_bin(binname, headers, separator):
             yield newbinname, splitheaders
+
 
 def binsplit(clusters, separator):
     """Splits a set of clusters by the prefix of their names.
@@ -667,7 +687,7 @@ def binsplit(clusters, separator):
     >>> binsplit(clusters, "-")
     {'s2-bin1': {'s1-c1', 's1-c3'}, 's1-bin1': {'s1-c1', 's1-c5'}, 's5-bin1': {'s1-c8'}}
     """
-    if iter(clusters) is clusters: # clusters is an iterator
+    if iter(clusters) is clusters:  # clusters is an iterator
         return _binsplit_generator(clusters, separator)
 
     elif isinstance(clusters, dict):
