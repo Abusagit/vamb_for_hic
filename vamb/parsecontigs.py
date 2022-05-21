@@ -10,17 +10,22 @@ import os as _os
 import numpy as _np
 import vamb.vambtools as _vambtools
 
+import re
+
 # This kernel is created in src/create_kernel.py. See that file for explanation
 _KERNEL = _vambtools.read_npz(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                              "kernel.npz"))
+                                            "kernel.npz"))
+
+NODE_LEN_COV_PATTERN = re.compile(r"length_(\d+)_cov_(\d+\.\d*)")
 
 def _project(fourmers, kernel=_KERNEL):
     "Project fourmers down in dimensionality"
     s = fourmers.sum(axis=1).reshape(-1, 1)
     s[s == 0] = 1.0
-    fourmers *= 1/s
-    fourmers += -(1/256)
+    fourmers *= 1 / s
+    fourmers += -(1 / 256)
     return _np.dot(fourmers, kernel)
+
 
 def _convert(raw, projected):
     "Move data from raw PushArray to projected PushArray, converting it."
@@ -28,6 +33,7 @@ def _convert(raw, projected):
     projected_mat = _project(raw_mat)
     projected.extend(projected_mat.ravel())
     raw.clear()
+
 
 def read_contigs(filehandle, minlength=100):
     """Parses a FASTA file open in binary reading mode.
@@ -60,17 +66,24 @@ def read_contigs(filehandle, minlength=100):
 
         if len(raw) > 256000:
             _convert(raw, projected)
-
+        #
+        # len_cov_pattern = NODE_LEN_COV_PATTERN.findall(entry.header)
+        # if len_cov_pattern:
+        #     adjusted_length, adjusted_coverage = len_cov_pattern[0]
+        #     lengths.append(adjusted_length)
+        # else:
+        #     lengths.append(len(entry))
+        #
         lengths.append(len(entry))
-        #contignames.append(entry.header)
-        contignames.append(entry.header.split()[0])
+        # contignames.append(entry.header)
+        contignames.append(entry.header)
 
     # Convert rest of contigs
     _convert(raw, projected)
     tnfs_arr = projected.take()
 
     # Don't use reshape since it creates a new array object with shared memory
-    tnfs_arr.shape = (len(tnfs_arr)//103, 103)
+    tnfs_arr.shape = (len(tnfs_arr) // 103, 103)
     lengths_arr = lengths.take()
 
     return tnfs_arr, contignames, lengths_arr

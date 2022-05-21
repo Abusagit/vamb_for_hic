@@ -27,6 +27,7 @@ sys.path.append(parentdir)
 import numpy as np
 import vamb
 
+
 ################################# DEFINE FUNCTIONS ##########################
 def log(string, logfile, indent=0):
     print(("\t" * indent) + string, file=logfile)
@@ -68,6 +69,7 @@ def calc_rpkm(jgipath, mincontiglength, refhash, ncontigs, logfile):
         rpkms = vamb.vambtools._load_jgi(file, mincontiglength, refhash)
 
     if len(rpkms) != ncontigs:
+        breakpoint()
         raise ValueError("Length of TNFs and length of RPKM does not match. Verify the inputs")
 
     elapsed = round(time.time() - begintime, 2)
@@ -77,9 +79,9 @@ def calc_rpkm(jgipath, mincontiglength, refhash, ncontigs, logfile):
 
 
 def trainvae(
-    outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda, batchsize, nepochs, lrate, batchsteps, logfile
+        outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda, batchsize, nepochs, lrate, batchsteps,
+        logfile
 ):
-
     begintime = time.time()
     log("\nCreating and training VAE", logfile)
 
@@ -115,7 +117,8 @@ def trainvae(
 
 
 def cluster(
-    clusterspath, latent, contignames, windowsize, minsuccesses, maxclusters, minclustersize, separator, cuda, logfile
+        clusterspath, latent, contignames, windowsize, minsuccesses, maxclusters, minclustersize, separator, cuda,
+        logfile
 ):
     begintime = time.time()
 
@@ -163,6 +166,8 @@ def write_fasta(outdir, clusterspath, fastapath, contignames, contiglengths, min
     log("Minimum FASTA size: {}".format(minfasta), logfile, 1)
 
     lengthof = dict(zip(contignames, contiglengths))
+    print(contignames)
+    print(contiglengths)
     filtered_clusters = dict()
 
     with open(clusterspath) as file:
@@ -193,30 +198,29 @@ def write_fasta(outdir, clusterspath, fastapath, contignames, contiglengths, min
 
 
 def run(
-    outdir,
-    fastapath,
-    jgipath,
-    logfile,
-    mincontiglength=2000,
-    norefcheck=False,
-    nhiddens=None,
-    nlatent=32,
-    nepochs=500,
-    batchsize=256,
-    cuda=False,
-    alpha=None,
-    beta=200,
-    dropout=None,
-    lrate=1e-3,
-    batchsteps=[25, 75, 150, 300],
-    windowsize=200,
-    minsuccesses=20,
-    minclustersize=1,
-    separator=None,
-    maxclusters=None,
-    minfasta=500000,
+        outdir,
+        fastapath,
+        jgipath,
+        logfile,
+        mincontiglength=2000,
+        norefcheck=False,
+        nhiddens=None,
+        nlatent=32,
+        nepochs=500,
+        batchsize=256,
+        cuda=False,
+        alpha=None,
+        beta=200,
+        dropout=None,
+        lrate=1e-3,
+        batchsteps=[25, 75, 150, 300],
+        windowsize=200,
+        minsuccesses=20,
+        minclustersize=1,
+        separator=None,
+        maxclusters=None,
+        minfasta=500000,
 ):
-
     log("Starting Vamb version " + ".".join(map(str, vamb.__version__)), logfile)
     log("Date and time is " + str(datetime.datetime.now()), logfile, 1)
     begintime = time.time()

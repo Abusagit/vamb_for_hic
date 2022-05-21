@@ -120,6 +120,7 @@ def calc_rpkm(outdir, bampaths, rpkmpath, jgipath, mincontiglength, refhash, nco
         shutil.rmtree(dumpdirectory)
 
     if len(rpkms) != ncontigs:
+        breakpoint()
         raise ValueError("Length of TNFs and length of RPKM does not match. Verify the inputs")
 
     elapsed = round(time.time() - begintime, 2)
