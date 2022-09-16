@@ -346,7 +346,7 @@ def write_clusters(filehandle, clusters, max_clusters=None, min_size=1, header=N
             clustername = "cluster_" + str(clusternumber + 1)
 
         for contig in contigs:
-            print(clustername, contig, sep="\t", file=filehandle)
+            print(contig, clustername, sep="\t", file=filehandle)
         filehandle.flush()
 
         clusternumber += 1

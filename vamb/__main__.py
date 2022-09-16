@@ -5,11 +5,14 @@
 import sys
 import os
 import argparse
+from turtle import title
 import torch
 import datetime
 import time
 import shutil
 import pickle
+
+from vamb.short_contigs_compensation import aggregate_features
 
 DEFAULT_PROCESSES = min(os.cpu_count(), 8)
 
@@ -129,14 +132,17 @@ def calc_rpkm(outdir, bampaths, rpkmpath, jgipath, mincontiglength, refhash, nco
     return rpkms
 
 def trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda,
-            batchsize, nepochs, lrate, batchsteps, logfile):
+            batchsize, nepochs, lrate, batchsteps, logfile, contiglengths,
+            kneighbors, shortlen, delta, gamma):
 
     begintime = time.time()
     log('\nCreating and training VAE', logfile)
 
     nsamples = rpkms.shape[1]
     vae = vamb.encode.VAE(nsamples, nhiddens=nhiddens, nlatent=nlatent,
-                            alpha=alpha, beta=beta, dropout=dropout, cuda=cuda)
+                            alpha=alpha, beta=beta, dropout=dropout, cuda=cuda,
+                            kneighbors=kneighbors, min_appropriate_length=shortlen, delta=delta, gamma=gamma,
+                            )
 
     log('Created VAE', logfile, 1)
     dataloader, mask = vamb.encode.make_dataloader(rpkms, tnfs, batchsize,
@@ -150,14 +156,17 @@ def trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda,
 
     modelpath = os.path.join(outdir, 'model.pt')
     vae.trainmodel(dataloader, nepochs=nepochs, lrate=lrate, batchsteps=batchsteps,
-                  logfile=logfile, modelfile=modelpath)
+                  logfile=logfile, modelfile=modelpath, lengths=contiglengths,
+                  
+                  )
 
     print('', file=logfile)
     log('Encoding to latent representation', logfile, 1)
     latent = vae.encode(dataloader)
+    
+    
     vamb.vambtools.write_npz(os.path.join(outdir, 'latent.npz'), latent)
     del vae # Needed to free "latent" array's memory references?
-
     elapsed = round(time.time() - begintime, 2)
     log('Trained VAE and encoded in {} seconds'.format(elapsed), logfile, 1)
 
@@ -234,7 +243,9 @@ def write_fasta(outdir, clusterspath, fastapath, contignames, contiglengths, min
 def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, jgipath,
         mincontiglength, norefcheck, minalignscore, minid, subprocesses, nhiddens, nlatent,
         nepochs, batchsize, cuda, alpha, beta, dropout, lrate, batchsteps, windowsize,
-        minsuccesses, minclustersize, separator, maxclusters, minfasta, logfile):
+        minsuccesses, minclustersize, separator, maxclusters, minfasta, logfile, 
+        kneighbors, shortlen, delta, gamma,
+        ):
 
     log('Starting Vamb version ' + '.'.join(map(str, vamb.__version__)), logfile)
     log('Date and time is ' + str(datetime.datetime.now()), logfile, 1)
@@ -252,16 +263,36 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
     
     # Train, save model
     mask, latent = trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta,
-                           dropout, cuda, batchsize, nepochs, lrate, batchsteps, logfile)
+                           dropout, cuda, batchsize, nepochs, lrate, batchsteps, logfile,
+                           contiglengths=contiglengths,
+                           kneighbors=kneighbors, shortlen=shortlen, delta=delta, gamma=gamma)
 
     del tnfs, rpkms
     contignames = [c for c, m in zip(contignames, mask) if m]
     vamb.vambtools.write_npz(os.path.join(outdir, 'names.npz'), contignames)
     # write contig features
-    with open("embs.tsv", 'w') as f:
+    
+    log(f"Saving latent features in {os.path.join(outdir, 'embs.tsv')}", logfile)
+    with open(os.path.join(outdir, "embs.tsv"), 'w') as f:
         for i in range(len(contignames)):
-            f.write(contignames[i] + "\t" + "\t".join([str(x) for x in latent[i]]) + "\n")
-        
+            values = '\t'.join([str(x) for x in latent[i]])
+            f.write(f"{contignames[i]}\t{values}\n")
+    
+    log("Final features aggregation for short contigs", logfile)
+    
+    short_length_indices = list(filter(lambda x: contiglengths[x] < shortlen, range(contiglengths.shape[0])))
+    
+    latent = aggregate_features(contig_lengths=contiglengths, short_indices=short_length_indices,
+                                gamma=gamma, delta=delta, K_neighbours=kneighbors,
+                                TRAINING=False, embeddings=latent)
+    
+    
+    log(f"Saving aggregated latent features in {os.path.join(outdir, 'embs_aggregated.tsv')}", logfile)
+    with open(os.path.join(outdir, "embs_aggregated.tsv"), 'w') as f:
+        for i in range(len(contignames)):
+            values = '\t'.join([str(x) for x in latent[i]])
+            f.write(f"{contignames[i]}\t{values}\n")
+            
     # Cluster, save tsv file
     clusterspath = os.path.join(outdir, 'clusters.tsv')
     cluster(clusterspath, latent, contignames, windowsize, minsuccesses, maxclusters,
@@ -367,6 +398,15 @@ def main():
                         default=None, help='stop after c clusters [None = infinite]')
     clusto.add_argument('-o', dest='separator', metavar='', type=str,
                         default=None, help='binsplit separator [None = no split]')
+    
+    
+    shortos = parser.add_argument_group(title="Options for short contigs embeddings adjustment", description=None)
+    shortos.add_argument('-k', dest="kneighbors", help="K neighbours to consider for embeddings adjustment [30]", default=30, type=int)
+    shortos.add_argument('--shortlen', help="Minimal contig lengths to be considered as long [20000]", type=int, default=20000)
+    shortos.add_argument("--gamma", type=float, default=0.2, help="Scaling factor for short contig`s own embedding to consider during aggregation update step [0.2]")
+    shortos.add_argument("--delta", type=float, default=0.8, help="Scaling factor for short contig neighbors score to consider dirung aggregation update step [0.8]")
+    
+    
 
     ######################### PRINT HELP IF NO ARGUMENTS ###################
     if len(sys.argv) == 1:
@@ -534,7 +574,12 @@ def main():
             separator=args.separator,
             maxclusters=args.maxclusters,
             minfasta=args.minfasta,
-            logfile=logfile)
+            logfile=logfile,
+            shortlen=args.shortlen,
+            gamma=args.gamma,
+            delta=args.delta,
+            kneighbors=args.kneighbors,
+            )
 
 if __name__ == '__main__':
     main()

@@ -18,6 +18,8 @@ import numpy as _np
 import torch as _torch
 _torch.manual_seed(0)
 
+from time import perf_counter
+
 from math import log as _log
 
 from torch import nn as _nn
@@ -26,6 +28,7 @@ from torch.nn.functional import softmax as _softmax
 from torch.utils.data import DataLoader as _DataLoader
 from torch.utils.data.dataset import TensorDataset as _TensorDataset
 import vamb.vambtools as _vambtools
+from vamb.short_contigs_compensation import aggregate_features
 
 if _torch.__version__ < '0.4':
     raise ImportError('PyTorch version must be 0.4 or newer')
@@ -126,9 +129,12 @@ class VAE(_nn.Module):
     """
 
     def __init__(self, nsamples, nhiddens=None, nlatent=32, alpha=None,
-                 beta=200, dropout=0.2, cuda=False):
+                 beta=200, gamma=0.2, delta=0.8, dropout=0.2, cuda=False, feature_aggregation_step=25,
+                 min_appropriate_length=20000,
+                 kneighbors=30):
+        
         if nlatent < 1:
-            raise ValueError('Minimum 1 latent neuron, not {}'.format(latent))
+            raise ValueError('Minimum 1 latent neuron, not {}'.format(nlatent))
 
         if nsamples < 1:
             raise ValueError('nsamples must be > 0, not {}'.format(nsamples))
@@ -166,7 +172,12 @@ class VAE(_nn.Module):
         self.nhiddens = nhiddens
         self.nlatent = nlatent
         self.dropout = dropout
-
+        self.feature_aggregation_step = feature_aggregation_step
+        self.min_appropriate_length = min_appropriate_length
+        self.gamma = gamma
+        self.delta = delta
+        self.kneighbors = kneighbors
+        
         # Initialize lists for holding hidden layers
         self.encoderlayers = _nn.ModuleList()
         self.encodernorms = _nn.ModuleList()
@@ -431,8 +442,8 @@ class VAE(_nn.Module):
 
         return vae
 
-    def trainmodel(self, dataloader, nepochs=500, lrate=1e-3,
-                   batchsteps=[25, 75, 150, 300], logfile=None, modelfile=None):
+    def trainmodel(self, dataloader, lengths, nepochs=500, lrate=1e-3,
+                   batchsteps=[25, 75, 150, 300], logfile=None, modelfile=None,):
         """Train the autoencoder from depths array and tnf array.
 
         Inputs:
@@ -489,8 +500,27 @@ class VAE(_nn.Module):
             print('\tN samples:', nsamples, file=logfile, end='\n\n')
 
         # Train
+        
+        short_length_indices = list(filter(lambda x: lengths[x] < self.min_appropriate_length, range(lengths.shape[0])))
         for epoch in range(nepochs):
             dataloader = self.trainepoch(dataloader, epoch, optimizer, batchsteps_set, logfile)
+            
+            if (epoch + 1) % self.feature_aggregation_step == 0:
+                print(f"Epoch {epoch + 1}, aggregating features for short contigs...", end=' ')
+                print("\tAggregating features for short contigs...", file=logfile)
+                start = perf_counter()
+                dataloader = aggregate_features(dataloader=dataloader, 
+                                                contig_lengths=lengths, 
+                                                short_indices=short_length_indices,
+                                                batch_size=dataloader.batch_size,
+                                                num_workers=dataloader.num_workers,
+                                                pin_memory=dataloader.pin_memory,
+                                                K_neighbours=self.kneighbors,
+                                                gamma=self.gamma,
+                                                delta=self.delta,
+                                                )
+                end = perf_counter()
+                print(f"Done in {int(end - start)} seconds")
 
         # Save weights - Lord forgive me, for I have sinned when catching all exceptions
         if modelfile is not None:
