@@ -68,7 +68,7 @@ def aggregate_features(contig_lengths,
     if TRAINING and dataloader:
         _unchanging_tensor, embeddings = dataloader.dataset[::1]
         embeddings = embeddings.cpu().numpy()
-    elif not TRAINING and embeddings:
+    elif not TRAINING and isinstance(embeddings, np.ndarray):
         embeddings = embeddings
     else:
         raise ArgumentError("Only valid inputs are: Dataloader during training and embeddings np.ndarray during final run!")    
