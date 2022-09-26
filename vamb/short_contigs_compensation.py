@@ -27,9 +27,15 @@ def read_contact_map(contact_map_file, contignames, minscore=None):
             contacts[nameid_2][nameid_1] = score
     
     contact_map_sorted_by_score = {}
+    
+    numcontacts = []
     for contigid_i, contacts in contacts.items():
         contact_map_sorted_by_score[contigid_i] = tuple(sorted(contacts.keys(), key=lambda x: contacts[x]))
-        
+        numcontacts.append(len(contact_map_sorted_by_score[contigid_i]))
+    
+    numcontacts = np.array(numcontacts)
+    print(f"Mean # of contacts with short contig: {numcontacts.mean()}, STD: {numcontacts.std()}")
+    
     return contact_map_sorted_by_score
 
 

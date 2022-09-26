@@ -283,8 +283,7 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
     
     log("Final features aggregation for short contigs", logfile)
     
-    short_length_indices = list(filter(lambda x: contiglengths[x] < shortlen, range(contiglengths.shape[0])))
-    short_length_indices = list(filter(lambda x: lengths[x] < self.min_appropriate_length and x in contact_map, range(lengths.shape[0])))
+    short_length_indices = list(filter(lambda x: contiglengths[x] < shortlen and x in contact_map, range(contiglengths.shape[0])))
     
     latent = aggregate_features(contig_lengths=contiglengths, short_indices=short_length_indices,
                                 gamma=gamma, delta=delta, K_neighbours=kneighbors,
@@ -410,6 +409,7 @@ def main():
     shortos.add_argument("--gamma", type=float, default=0.2, help="Scaling factor for short contig`s own embedding to consider during aggregation update step [0.2]")
     shortos.add_argument("--delta", type=float, default=0.8, help="Scaling factor for short contig neighbors score to consider dirung aggregation update step [0.8]")
     shortos.add_argument("--contact_map", help="Location of contact map file for contigs in .tsv format")
+    shortos.add_argument("--options", nargs='+', default=["during", "after"], help="Stay-true options for aggregation procedure performing: during - during training, after - perform after training")
     
     
 
