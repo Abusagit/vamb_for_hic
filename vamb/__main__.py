@@ -12,7 +12,7 @@ import time
 import shutil
 import pickle
 
-from vamb.short_contigs_compensation import aggregate_features
+from vamb.short_contigs_compensation import aggregate_features, read_contact_map
 
 DEFAULT_PROCESSES = min(os.cpu_count(), 8)
 
@@ -133,7 +133,7 @@ def calc_rpkm(outdir, bampaths, rpkmpath, jgipath, mincontiglength, refhash, nco
 
 def trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda,
             batchsize, nepochs, lrate, batchsteps, logfile, contiglengths,
-            kneighbors, shortlen, delta, gamma):
+            kneighbors, shortlen, delta, gamma, contact_map):
 
     begintime = time.time()
     log('\nCreating and training VAE', logfile)
@@ -155,8 +155,9 @@ def trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda,
     print('', file=logfile)
 
     modelpath = os.path.join(outdir, 'model.pt')
+    
     vae.trainmodel(dataloader, nepochs=nepochs, lrate=lrate, batchsteps=batchsteps,
-                  logfile=logfile, modelfile=modelpath, lengths=contiglengths,
+                  logfile=logfile, modelfile=modelpath, lengths=contiglengths, contact_map=contact_map
                   
                   )
 
@@ -221,7 +222,7 @@ def write_fasta(outdir, clusterspath, fastapath, contignames, contiglengths, min
         size = sum(lengthof[contig] for contig in contigs)
         if size >= minfasta:
             filtered_clusters[cluster] = clusters[cluster]
-
+            
     del lengthof, clusters
     keep = set()
     for contigs in filtered_clusters.values():
@@ -244,7 +245,7 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
         mincontiglength, norefcheck, minalignscore, minid, subprocesses, nhiddens, nlatent,
         nepochs, batchsize, cuda, alpha, beta, dropout, lrate, batchsteps, windowsize,
         minsuccesses, minclustersize, separator, maxclusters, minfasta, logfile, 
-        kneighbors, shortlen, delta, gamma,
+        kneighbors, shortlen, delta, gamma, contact_map,
         ):
 
     log('Starting Vamb version ' + '.'.join(map(str, vamb.__version__)), logfile)
@@ -255,6 +256,8 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
     tnfs, contignames, contiglengths = calc_tnf(outdir, fastapath, tnfpath, namespath,
                                                 lengthspath, mincontiglength, logfile)
 
+    contact_map = read_contact_map(contact_map_file=contact_map, contignames=contignames)
+    
     # Parse BAMs, save as npz
     refhash = None if norefcheck else vamb.vambtools._hash_refnames(contignames)
     rpkms = calc_rpkm(outdir, bampaths, rpkmpath, jgipath, mincontiglength, refhash,
@@ -265,7 +268,7 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
     mask, latent = trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta,
                            dropout, cuda, batchsize, nepochs, lrate, batchsteps, logfile,
                            contiglengths=contiglengths,
-                           kneighbors=kneighbors, shortlen=shortlen, delta=delta, gamma=gamma)
+                           kneighbors=kneighbors, shortlen=shortlen, delta=delta, gamma=gamma, contact_map=contact_map)
 
     del tnfs, rpkms
     contignames = [c for c, m in zip(contignames, mask) if m]
@@ -281,10 +284,11 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
     log("Final features aggregation for short contigs", logfile)
     
     short_length_indices = list(filter(lambda x: contiglengths[x] < shortlen, range(contiglengths.shape[0])))
+    short_length_indices = list(filter(lambda x: lengths[x] < self.min_appropriate_length and x in contact_map, range(lengths.shape[0])))
     
     latent = aggregate_features(contig_lengths=contiglengths, short_indices=short_length_indices,
                                 gamma=gamma, delta=delta, K_neighbours=kneighbors,
-                                TRAINING=False, embeddings=latent)
+                                TRAINING=False, embeddings=latent, contact_map=contact_map)
     
     
     log(f"Saving aggregated latent features in {os.path.join(outdir, 'embs_aggregated.tsv')}", logfile)
@@ -405,6 +409,7 @@ def main():
     shortos.add_argument('--shortlen', help="Minimal contig lengths to be considered as long [20000]", type=int, default=20000)
     shortos.add_argument("--gamma", type=float, default=0.2, help="Scaling factor for short contig`s own embedding to consider during aggregation update step [0.2]")
     shortos.add_argument("--delta", type=float, default=0.8, help="Scaling factor for short contig neighbors score to consider dirung aggregation update step [0.8]")
+    shortos.add_argument("--contact_map", help="Location of contact map file for contigs in .tsv format")
     
     
 
@@ -579,6 +584,7 @@ def main():
             gamma=args.gamma,
             delta=args.delta,
             kneighbors=args.kneighbors,
+            contact_map=args.contact_map
             )
 
 if __name__ == '__main__':

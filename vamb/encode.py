@@ -442,7 +442,7 @@ class VAE(_nn.Module):
 
         return vae
 
-    def trainmodel(self, dataloader, lengths, nepochs=500, lrate=1e-3,
+    def trainmodel(self, dataloader, lengths, contact_map, nepochs=500, lrate=1e-3,
                    batchsteps=[25, 75, 150, 300], logfile=None, modelfile=None,):
         """Train the autoencoder from depths array and tnf array.
 
@@ -501,7 +501,9 @@ class VAE(_nn.Module):
 
         # Train
         
-        short_length_indices = list(filter(lambda x: lengths[x] < self.min_appropriate_length, range(lengths.shape[0])))
+        short_length_indices = list(filter(lambda x: lengths[x] < self.min_appropriate_length and x in contact_map, range(lengths.shape[0])))
+        
+        
         for epoch in range(nepochs):
             dataloader = self.trainepoch(dataloader, epoch, optimizer, batchsteps_set, logfile)
             
@@ -518,6 +520,7 @@ class VAE(_nn.Module):
                                                 K_neighbours=self.kneighbors,
                                                 gamma=self.gamma,
                                                 delta=self.delta,
+                                                contact_map=contact_map,
                                                 )
                 end = perf_counter()
                 print(f"Done in {int(end - start)} seconds")
