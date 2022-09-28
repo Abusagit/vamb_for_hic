@@ -133,7 +133,7 @@ def calc_rpkm(outdir, bampaths, rpkmpath, jgipath, mincontiglength, refhash, nco
 
 def trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda,
             batchsize, nepochs, lrate, batchsteps, logfile, contiglengths,
-            kneighbors, shortlen, delta, gamma, contact_map):
+            kneighbors, shortlen, delta, gamma, contact_map, aggregation_steps, aggregation_option):
 
     begintime = time.time()
     log('\nCreating and training VAE', logfile)
@@ -157,7 +157,8 @@ def trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda,
     modelpath = os.path.join(outdir, 'model.pt')
     
     vae.trainmodel(dataloader, nepochs=nepochs, lrate=lrate, batchsteps=batchsteps,
-                  logfile=logfile, modelfile=modelpath, lengths=contiglengths, contact_map=contact_map
+                  logfile=logfile, modelfile=modelpath, lengths=contiglengths, contact_map=contact_map,
+                  aggregation_option=aggregation_option, aggregation_steps=aggregation_steps,
                   
                   )
 
@@ -245,7 +246,7 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
         mincontiglength, norefcheck, minalignscore, minid, subprocesses, nhiddens, nlatent,
         nepochs, batchsize, cuda, alpha, beta, dropout, lrate, batchsteps, windowsize,
         minsuccesses, minclustersize, separator, maxclusters, minfasta, logfile, 
-        kneighbors, shortlen, delta, gamma, contact_map,
+        kneighbors, shortlen, delta, gamma, contact_map, aggregation_steps, aggregation_option,
         ):
 
     log('Starting Vamb version ' + '.'.join(map(str, vamb.__version__)), logfile)
@@ -268,7 +269,8 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
     mask, latent = trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta,
                            dropout, cuda, batchsize, nepochs, lrate, batchsteps, logfile,
                            contiglengths=contiglengths,
-                           kneighbors=kneighbors, shortlen=shortlen, delta=delta, gamma=gamma, contact_map=contact_map)
+                           kneighbors=kneighbors, shortlen=shortlen, delta=delta, gamma=gamma, contact_map=contact_map,
+                           aggregation_steps=aggregation_steps, aggregation_option=aggregation_option)
 
     del tnfs, rpkms
     contignames = [c for c, m in zip(contignames, mask) if m]
@@ -285,9 +287,10 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
     
     short_length_indices = list(filter(lambda x: contiglengths[x] < shortlen and x in contact_map, range(contiglengths.shape[0])))
     
-    latent = aggregate_features(contig_lengths=contiglengths, short_indices=short_length_indices,
-                                gamma=gamma, delta=delta, K_neighbours=kneighbors,
-                                TRAINING=False, embeddings=latent, contact_map=contact_map)
+    if aggregation_option in {"full", "after"}:
+        latent = aggregate_features(contig_lengths=contiglengths, short_indices=short_length_indices,
+                                    gamma=gamma, delta=delta, K_neighbours=kneighbors,
+                                    TRAINING=False, embeddings=latent, contact_map=contact_map, steps=aggregation_steps)
     
     
     log(f"Saving aggregated latent features in {os.path.join(outdir, 'embs_aggregated.tsv')}", logfile)
@@ -409,7 +412,9 @@ def main():
     shortos.add_argument("--gamma", type=float, default=0.2, help="Scaling factor for short contig`s own embedding to consider during aggregation update step [0.2]")
     shortos.add_argument("--delta", type=float, default=0.8, help="Scaling factor for short contig neighbors score to consider dirung aggregation update step [0.8]")
     shortos.add_argument("--contact_map", help="Location of contact map file for contigs in .tsv format")
-    shortos.add_argument("--options", nargs='+', default=["during", "after"], help="Stay-true options for aggregation procedure performing: during - during training, after - perform after training")
+    shortos.add_argument("--option", choices=["during", "after", "full"], default="full",
+                         help="Options for aggregation procedure performing: during - during training, after - perform after training")
+    shortos.add_argument("--aggregation_runs", type=int, default=1, help="Number of aggregation steps during single procedure execution")
     
     
 
@@ -584,7 +589,10 @@ def main():
             gamma=args.gamma,
             delta=args.delta,
             kneighbors=args.kneighbors,
-            contact_map=args.contact_map
+            contact_map=args.contact_map,
+            aggregation_steps=args.aggregation_runs,
+            aggregation_option=args.option,
+            
             )
 
 if __name__ == '__main__':
