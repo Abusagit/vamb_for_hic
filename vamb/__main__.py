@@ -277,27 +277,29 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
     vamb.vambtools.write_npz(os.path.join(outdir, 'names.npz'), contignames)
     # write contig features
     
-    log(f"Saving latent features in {os.path.join(outdir, 'embs.tsv')}", logfile)
-    with open(os.path.join(outdir, "embs.tsv"), 'w') as f:
-        for i in range(len(contignames)):
-            values = '\t'.join([str(x) for x in latent[i]])
-            f.write(f"{contignames[i]}\t{values}\n")
-    
-    log("Final features aggregation for short contigs", logfile)
-    
     short_length_indices = list(filter(lambda x: contiglengths[x] < shortlen and x in contact_map, range(contiglengths.shape[0])))
     
     if aggregation_option in {"full", "after"}:
+        log("Final features aggregation for short contigs", logfile)
         latent = aggregate_features(contig_lengths=contiglengths, short_indices=short_length_indices,
                                     gamma=gamma, delta=delta, K_neighbours=kneighbors,
                                     TRAINING=False, embeddings=latent, contact_map=contact_map, steps=aggregation_steps)
+        
+        log(f"Saving aggregated latent features in {os.path.join(outdir, 'embs.tsv')}", logfile)
+        with open(os.path.join(outdir, "embs.tsv"), 'w') as f:
+            for i in range(len(contignames)):
+                values = '\t'.join([str(x) for x in latent[i]])
+                f.write(f"{contignames[i]}\t{values}\n")
+                
+    else:
+        log(f"Saving latent features in {os.path.join(outdir, 'embs.tsv')}", logfile)
+        with open(os.path.join(outdir, "embs.tsv"), 'w') as f:
+            for i in range(len(contignames)):
+                values = '\t'.join([str(x) for x in latent[i]])
+                f.write(f"{contignames[i]}\t{values}\n")
     
     
-    log(f"Saving aggregated latent features in {os.path.join(outdir, 'embs_aggregated.tsv')}", logfile)
-    with open(os.path.join(outdir, "embs_aggregated.tsv"), 'w') as f:
-        for i in range(len(contignames)):
-            values = '\t'.join([str(x) for x in latent[i]])
-            f.write(f"{contignames[i]}\t{values}\n")
+
             
     # Cluster, save tsv file
     clusterspath = os.path.join(outdir, 'clusters.tsv')
