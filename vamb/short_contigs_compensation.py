@@ -46,24 +46,26 @@ def normalize_rows_by_length(array):
     return x
 
 
-def aggregation_step_hic(embeddings, contact_map, contig_lengths, K_neighbours, short_indices, gamma, delta):
+def aggregation_step_hic(embeddings, contact_map, contig_lengths, K_neighbours, gamma, delta):
     emb_size = embeddings.shape[1]
     new_embeds = []
     
-    for short_contigid in tqdm(short_indices):
-        top_k_neighborhood_idxs  = contact_map[short_contigid][:min(K_neighbours, len(contact_map[short_contigid]))]
+    for contigid in tqdm(range(embeddings.shape[0]), total=embeddings.shape[0]):
+        top_k_neighborhood_idxs  = contact_map[contigid][:min(K_neighbours, len(contact_map[contigid]))]
         
         neighbors_lengths = np.take(contig_lengths, top_k_neighborhood_idxs, axis=0)
         neighbors_embeddings = np.take(embeddings, top_k_neighborhood_idxs, axis=0)
         
-        overall_length = neighbors_lengths.sum()
+        contig_length = contig_lengths[contigid]
+        overall_length = neighbors_lengths.sum()# + contig_length
+        
 
         aggregation = np.zeros(emb_size)
         
         for length_k, emb_k in zip(neighbors_lengths, neighbors_embeddings):
             aggregation += length_k / overall_length * emb_k
         
-        new_embedding = gamma * embeddings[short_contigid] + delta * aggregation
+        new_embedding = gamma * embeddings[contigid] + delta * aggregation
         
         new_embeds.append(new_embedding)
         
@@ -75,7 +77,6 @@ def aggregation_step_hic(embeddings, contact_map, contig_lengths, K_neighbours, 
 
 def aggregate_features(contig_lengths,
                        contact_map,
-                       short_indices,
                        gamma,
                        delta,
                        dataloader: torch.utils.data.DataLoader=None,
@@ -97,7 +98,7 @@ def aggregate_features(contig_lengths,
         raise ArgumentError("Only valid inputs are: Dataloader during training and embeddings np.ndarray during final run!")    
     
     for _ in range(steps):
-        embeddings = aggregation_step_hic(embeddings, contact_map, contig_lengths, K_neighbours, short_indices, gamma, delta)
+        embeddings = aggregation_step_hic(embeddings, contact_map, contig_lengths, K_neighbours, gamma, delta)
         
     if TRAINING:
         embeddings_tensor = torch.from_numpy(embeddings)
