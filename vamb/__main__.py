@@ -133,7 +133,7 @@ def calc_rpkm(outdir, bampaths, rpkmpath, jgipath, mincontiglength, refhash, nco
 
 def trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda,
             batchsize, nepochs, lrate, batchsteps, logfile, contiglengths,
-            kneighbors, shortlen, delta, gamma, contact_map, aggregation_steps, aggregation_option):
+            kneighbors, delta, gamma, contact_map, aggregation_steps, aggregation_option):
 
     begintime = time.time()
     log('\nCreating and training VAE', logfile)
@@ -141,7 +141,7 @@ def trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda,
     nsamples = rpkms.shape[1]
     vae = vamb.encode.VAE(nsamples, nhiddens=nhiddens, nlatent=nlatent,
                             alpha=alpha, beta=beta, dropout=dropout, cuda=cuda,
-                            kneighbors=kneighbors, min_appropriate_length=shortlen, delta=delta, gamma=gamma,
+                            kneighbors=kneighbors, delta=delta, gamma=gamma,
                             )
 
     log('Created VAE', logfile, 1)
@@ -246,7 +246,7 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
         mincontiglength, norefcheck, minalignscore, minid, subprocesses, nhiddens, nlatent,
         nepochs, batchsize, cuda, alpha, beta, dropout, lrate, batchsteps, windowsize,
         minsuccesses, minclustersize, separator, maxclusters, minfasta, logfile, 
-        kneighbors, shortlen, delta, gamma, contact_map, aggregation_steps, aggregation_option,
+        kneighbors, delta, gamma, contact_map, aggregation_steps, aggregation_option,
         ):
 
     log('Starting Vamb version ' + '.'.join(map(str, vamb.__version__)), logfile)
@@ -269,19 +269,18 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
     mask, latent = trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta,
                            dropout, cuda, batchsize, nepochs, lrate, batchsteps, logfile,
                            contiglengths=contiglengths,
-                           kneighbors=kneighbors, shortlen=shortlen, delta=delta, gamma=gamma, contact_map=contact_map,
+                           kneighbors=kneighbors, delta=delta, gamma=gamma, contact_map=contact_map,
                            aggregation_steps=aggregation_steps, aggregation_option=aggregation_option)
 
     del tnfs, rpkms
     contignames = [c for c, m in zip(contignames, mask) if m]
     vamb.vambtools.write_npz(os.path.join(outdir, 'names.npz'), contignames)
-    # write contig features
+    # write contig features    
     
-    short_length_indices = list(filter(lambda x: contiglengths[x] < shortlen and x in contact_map, range(contiglengths.shape[0])))
-    
+    contig_indices = list(range(contiglengths.shape[0]))
     if aggregation_option in {"full", "after"}:
-        log("Final features aggregation for short contigs", logfile)
-        latent = aggregate_features(contig_lengths=contiglengths, short_indices=short_length_indices,
+        log("Final features aggregation for contigs", logfile)
+        latent = aggregate_features(contig_lengths=contiglengths,
                                     gamma=gamma, delta=delta, K_neighbours=kneighbors,
                                     TRAINING=False, embeddings=latent, contact_map=contact_map, steps=aggregation_steps)
         
@@ -408,11 +407,10 @@ def main():
                         default=None, help='binsplit separator [None = no split]')
     
     
-    shortos = parser.add_argument_group(title="Options for short contigs embeddings adjustment", description=None)
+    shortos = parser.add_argument_group(title="Options for contigs embeddings adjustment accordung to", description=None)
     shortos.add_argument('-k', dest="kneighbors", help="K neighbours to consider for embeddings adjustment [30]", default=30, type=int)
-    shortos.add_argument('--shortlen', help="Minimal contig lengths to be considered as long [20000]", type=int, default=20000)
-    shortos.add_argument("--gamma", type=float, default=0.2, help="Scaling factor for short contig`s own embedding to consider during aggregation update step [0.2]")
-    shortos.add_argument("--delta", type=float, default=0.8, help="Scaling factor for short contig neighbors score to consider dirung aggregation update step [0.8]")
+    shortos.add_argument("--gamma", type=float, default=0.2, help="Scaling factor for contig`s own embedding to consider during aggregation update step [0.2]")
+    shortos.add_argument("--delta", type=float, default=0.8, help="Scaling factor for contig neighbors score to consider dirung aggregation update step [0.8]")
     shortos.add_argument("--contact_map", help="Location of contact map file for contigs in .tsv format")
     shortos.add_argument("--option", choices=["during", "after", "full"], default="full",
                          help="Options for aggregation procedure performing: during - during training, after - perform after training")
@@ -587,7 +585,6 @@ def main():
             maxclusters=args.maxclusters,
             minfasta=args.minfasta,
             logfile=logfile,
-            shortlen=args.shortlen,
             gamma=args.gamma,
             delta=args.delta,
             kneighbors=args.kneighbors,

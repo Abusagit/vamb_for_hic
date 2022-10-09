@@ -130,7 +130,6 @@ class VAE(_nn.Module):
 
     def __init__(self, nsamples, nhiddens=None, nlatent=32, alpha=None,
                  beta=200, gamma=0.2, delta=0.8, dropout=0.2, cuda=False, feature_aggregation_step=25,
-                 min_appropriate_length=20000,
                  kneighbors=30):
         
         if nlatent < 1:
@@ -173,7 +172,6 @@ class VAE(_nn.Module):
         self.nlatent = nlatent
         self.dropout = dropout
         self.feature_aggregation_step = feature_aggregation_step
-        self.min_appropriate_length = min_appropriate_length
         self.gamma = gamma
         self.delta = delta
         self.kneighbors = kneighbors
@@ -501,8 +499,6 @@ class VAE(_nn.Module):
 
         # Train
         
-        short_length_indices = list(filter(lambda x: lengths[x] < self.min_appropriate_length and x in contact_map, range(lengths.shape[0])))
-        
         if aggregation_option in {"during", "full"}:
             for epoch in range(nepochs):
                 dataloader = self.trainepoch(dataloader, epoch, optimizer, batchsteps_set, logfile)
@@ -513,7 +509,6 @@ class VAE(_nn.Module):
                     start = perf_counter()
                     dataloader = aggregate_features(dataloader=dataloader, 
                                                     contig_lengths=lengths, 
-                                                    short_indices=short_length_indices,
                                                     batch_size=dataloader.batch_size,
                                                     num_workers=dataloader.num_workers,
                                                     pin_memory=dataloader.pin_memory,
