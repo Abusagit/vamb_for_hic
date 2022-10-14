@@ -34,7 +34,7 @@ def read_contact_map(contact_map_file, contignames, minscore=None):
         numcontacts.append(len(contact_map_sorted_by_score[contigid_i]))
     
     numcontacts = np.array(numcontacts)
-    print(f"Mean # of contacts with short contig: {numcontacts.mean()}, STD: {numcontacts.std()}")
+    print(f"Mean # of contacts for each contig: {numcontacts.mean()}, STD: {numcontacts.std()}")
     
     return contact_map_sorted_by_score
 
@@ -46,11 +46,12 @@ def normalize_rows_by_length(array):
     return x
 
 
-def aggregation_step_hic(embeddings, contact_map, contig_lengths, K_neighbours, gamma, delta):
+def aggregation_step_hic(embeddings, contact_map, contig_lengths, K_neighbours, gamma, delta, indices):
     emb_size = embeddings.shape[1]
     new_embeds = []
     
-    for contigid in tqdm(range(embeddings.shape[0]), total=embeddings.shape[0]):
+    hic_indices = tuple(set(contact_map.keys()) & set(indices))
+    for contigid in tqdm(hic_indices, total=len(hic_indices)):
         top_k_neighborhood_idxs  = contact_map[contigid][:min(K_neighbours, len(contact_map[contigid]))]
         
         neighbors_lengths = np.take(contig_lengths, top_k_neighborhood_idxs, axis=0)
@@ -69,7 +70,7 @@ def aggregation_step_hic(embeddings, contact_map, contig_lengths, K_neighbours, 
         
         new_embeds.append(new_embedding)
         
-    for i, e in zip(short_indices, new_embeds):
+    for i, e in zip(hic_indices, new_embeds):
         embeddings[i] = e
         
         
@@ -79,6 +80,7 @@ def aggregate_features(contig_lengths,
                        contact_map,
                        gamma,
                        delta,
+                       indices,
                        dataloader: torch.utils.data.DataLoader=None,
                        embeddings: np.ndarray=None,
                        K_neighbours=30,
@@ -98,7 +100,7 @@ def aggregate_features(contig_lengths,
         raise ArgumentError("Only valid inputs are: Dataloader during training and embeddings np.ndarray during final run!")    
     
     for _ in range(steps):
-        embeddings = aggregation_step_hic(embeddings, contact_map, contig_lengths, K_neighbours, gamma, delta)
+        embeddings = aggregation_step_hic(embeddings, contact_map, contig_lengths, K_neighbours, gamma, delta, indices)
         
     if TRAINING:
         embeddings_tensor = torch.from_numpy(embeddings)

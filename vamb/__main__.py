@@ -133,7 +133,7 @@ def calc_rpkm(outdir, bampaths, rpkmpath, jgipath, mincontiglength, refhash, nco
 
 def trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda,
             batchsize, nepochs, lrate, batchsteps, logfile, contiglengths,
-            kneighbors, delta, gamma, contact_map, aggregation_steps, aggregation_option):
+            kneighbors, delta, gamma, contact_map, aggregation_steps, aggregation_option, indices):
 
     begintime = time.time()
     log('\nCreating and training VAE', logfile)
@@ -159,6 +159,7 @@ def trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta, dropout, cuda,
     vae.trainmodel(dataloader, nepochs=nepochs, lrate=lrate, batchsteps=batchsteps,
                   logfile=logfile, modelfile=modelpath, lengths=contiglengths, contact_map=contact_map,
                   aggregation_option=aggregation_option, aggregation_steps=aggregation_steps,
+                  indices=indices
                   
                   )
 
@@ -246,7 +247,7 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
         mincontiglength, norefcheck, minalignscore, minid, subprocesses, nhiddens, nlatent,
         nepochs, batchsize, cuda, alpha, beta, dropout, lrate, batchsteps, windowsize,
         minsuccesses, minclustersize, separator, maxclusters, minfasta, logfile, 
-        kneighbors, delta, gamma, contact_map, aggregation_steps, aggregation_option,
+        kneighbors, delta, gamma, contact_map, aggregation_steps, aggregation_option,minlen,
         ):
 
     log('Starting Vamb version ' + '.'.join(map(str, vamb.__version__)), logfile)
@@ -266,9 +267,11 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
 
     
     # Train, save model
+    contig_indices = list(filter(lambda index: contiglengths[index] <= minlen, range(contiglengths.shape[0])))
+    
     mask, latent = trainvae(outdir, rpkms, tnfs, nhiddens, nlatent, alpha, beta,
                            dropout, cuda, batchsize, nepochs, lrate, batchsteps, logfile,
-                           contiglengths=contiglengths,
+                           contiglengths=contiglengths, indices=contig_indices,
                            kneighbors=kneighbors, delta=delta, gamma=gamma, contact_map=contact_map,
                            aggregation_steps=aggregation_steps, aggregation_option=aggregation_option)
 
@@ -277,12 +280,11 @@ def run(outdir, fastapath, tnfpath, namespath, lengthspath, bampaths, rpkmpath, 
     vamb.vambtools.write_npz(os.path.join(outdir, 'names.npz'), contignames)
     # write contig features    
     
-    contig_indices = list(range(contiglengths.shape[0]))
     if aggregation_option in {"full", "after"}:
         log("Final features aggregation for contigs", logfile)
         latent = aggregate_features(contig_lengths=contiglengths,
                                     gamma=gamma, delta=delta, K_neighbours=kneighbors,
-                                    TRAINING=False, embeddings=latent, contact_map=contact_map, steps=aggregation_steps)
+                                    TRAINING=False, embeddings=latent, contact_map=contact_map, steps=aggregation_steps, indices=contig_indices)
         
         log(f"Saving aggregated latent features in {os.path.join(outdir, 'embs.tsv')}", logfile)
         with open(os.path.join(outdir, "embs.tsv"), 'w') as f:
@@ -409,6 +411,7 @@ def main():
     
     shortos = parser.add_argument_group(title="Options for contigs embeddings adjustment accordung to", description=None)
     shortos.add_argument('-k', dest="kneighbors", help="K neighbours to consider for embeddings adjustment [30]", default=30, type=int)
+    shortos.add_argument("--short", type=int, default=500_000, help="Maximal length for short contig")
     shortos.add_argument("--gamma", type=float, default=0.2, help="Scaling factor for contig`s own embedding to consider during aggregation update step [0.2]")
     shortos.add_argument("--delta", type=float, default=0.8, help="Scaling factor for contig neighbors score to consider dirung aggregation update step [0.8]")
     shortos.add_argument("--contact_map", help="Location of contact map file for contigs in .tsv format")
@@ -591,6 +594,7 @@ def main():
             contact_map=args.contact_map,
             aggregation_steps=args.aggregation_runs,
             aggregation_option=args.option,
+            minlen=args.short,
             
             )
 

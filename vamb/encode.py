@@ -440,7 +440,7 @@ class VAE(_nn.Module):
 
         return vae
 
-    def trainmodel(self, dataloader, lengths, contact_map, aggregation_steps, aggregation_option, nepochs=500, lrate=1e-3,
+    def trainmodel(self, dataloader, lengths, contact_map, aggregation_steps, aggregation_option, indices, nepochs=500, lrate=1e-3,
                    batchsteps=[25, 75, 150, 300], logfile=None, modelfile=None,):
         """Train the autoencoder from depths array and tnf array.
 
@@ -517,6 +517,7 @@ class VAE(_nn.Module):
                                                     delta=self.delta,
                                                     contact_map=contact_map,
                                                     steps=aggregation_steps,
+                                                    indices=indices,
                                                     )
                     end = perf_counter()
                     print(f"Done in {int(end - start)} seconds")
